@@ -89,36 +89,22 @@ bool intersectCubes(const Ray& ray, Vec3i& index, double& now_t){
 }
 
 Vec3d getNormal(const Ray& ray, Vec3i index, double t){
-    std::vector< std::pair<double, Vec3d> > normal_list;
+    double nx = (index.x + .5)*cubeWidth,
+           ny = (index.y + .5)*cubeWidth,
+           nz = (index.z + .5)*cubeWidth;
+
+    Vec3d r = ray(t) - Vec3d(nx, ny, nz);
+
+    double ax = std::abs(r.x),
+           ay = std::abs(r.y),
+           az = std::abs(r.z);
+
+    if(ax >= std::max(ay, az)) return Vec3d(r.x > 0 ? 1 : -1, 0, 0);
+    if(ay >= std::max(ax, az)) return Vec3d(0, r.y > 0 ? 1 : -1, 0);
+    if(az >= std::max(ax, ay)) return Vec3d(0, 0, r.z > 0 ? 1 : -1);
     
-    double nx = index.x*cubeWidth,
-           ny = index.y*cubeWidth,
-           nz = index.z*cubeWidth;
+    assert(0);
            
-    if(not isZero(ray.d.x)){
-        normal_list.push_back({(nx - ray.o.x)/ray.d.x, Vec3d(-1, 0, 0)});
-        normal_list.push_back({(nx+cubeWidth - ray.o.x)/ray.d.x, Vec3d(1, 0, 0)});
-    }
-
-    if(not isZero(ray.d.y)){
-        normal_list.push_back({(ny - ray.o.y)/ray.d.y, Vec3d(0, -1, 0)});
-        normal_list.push_back({(ny+cubeWidth - ray.o.y)/ray.d.y, Vec3d(0, 1, 0)});
-    }
-
-    if(not isZero(ray.d.z)){
-        normal_list.push_back({(nz - ray.o.z)/ray.d.z, Vec3d(0, 0, -1)});
-        normal_list.push_back({(nz+cubeWidth - ray.o.z)/ray.d.z, Vec3d(0, 0, 1)});
-    }
-
-
-    for(auto& p : normal_list){
-        p.first = std::abs(p.first - t);
-    }
-
-    std::sort(normal_list.begin(), normal_list.end());
-
-    assert(normal_list.size());
-    return normal_list[0].second;
 }
 
 Ray reflect(const Ray& ray, Vec3i cubeIndex, double t){
@@ -146,17 +132,17 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         return black;
     }
 
-    const Sphere light(Vec3d(500, 0, 500), 100);
+    const Sphere light1(Vec3d(500, 0, 1000), 500);
 
     Vec3i cubeIndex;
     double tt;
 
-    if(light.intersect(ray, tt)){
-        return white;
+    if(intersectCubes(ray, cubeIndex, tt)){
+        return rayTracing(reflect(ray, cubeIndex, tt), level+1)*red;
     }
 
-    if(intersectCubes(ray, cubeIndex, tt)){
-        return rayTracing(reflect(ray, cubeIndex, tt), level+1)*red*0.95;
+    if(light1.intersect(ray, tt)){
+        return white;
     }
 
     return black;
@@ -168,9 +154,9 @@ int main(){
 
     for(int lx = 0;lx < MAX_X;lx++)
         for(int lz = 0;lz < MAX_Z;lz++){
-            Cubes[lx][7][lz] = 1;
+            Cubes[lx][9][lz] = 1;
             if(lx&1 and lz&1)
-                Cubes[lx][6][lz] = 1;
+                Cubes[lx][8][lz] = 1;
         }
 
     std::ofstream out("out.ppm");
@@ -181,19 +167,23 @@ int main(){
     Vec3d eye(W/2, H/2, -500);
 
     for (int y = 0; y < H; ++y){
+        std::cout << y*100/H << "%\r";
+        std::cout << std::flush;
+
         for (int x = 0; x < W; ++x){
-            std::cout << "\r" << y*W + x << "/" << W*H;
 
             Vec3d col;
 
-            for(int s = 0;s < 64;s++){ 
+            const int SAMPLE_COUNT = 64;
+
+            for(int s = 0;s < SAMPLE_COUNT;s++){ 
                 double sx, sy;
                 sampleSquare(sx, sy);
                 Ray ray(Vec3d(x+sx,y+sy,0), Vec3d(x+sx, y+sy, 0) - eye);
                 col = col + rayTracing(ray);
             }
 
-            col = col/32.;
+            col = col/SAMPLE_COUNT;
             col = col*255;
 
             out << (int)col.x << ' '
@@ -201,6 +191,7 @@ int main(){
                 << (int)col.z << '\n';
         }
     }
+
     std::cout << std::endl;
     return 0;
 }
