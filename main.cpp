@@ -5,8 +5,10 @@
 #include <iostream>
 #include <limits>
 #include <algorithm>
+#include <utility>
+#include <vector>
 
-double clamp(double x, double l, double u){
+double clamp_(double x, double l, double u){
     return (x < l) ? l : ((x > u) ? u : x);
 }
 
@@ -18,15 +20,24 @@ struct Vec3 {
     Vec3<T> operator - (const Vec3<T>& v) const { return Vec3<T>(x-v.x, y-v.y, z-v.z); }
     Vec3<T> operator * (T d) const { return Vec3<T>(x*d, y*d, z*d); }
     Vec3<T> operator / (T d) const { return Vec3<T>(x/d, y/d, z/d); }
+
+    bool operator < (const Vec3<T>& v) const {
+        return std::tie(x, y, z) < std::tie(v.x, v.y, v.z);
+    }
+
+    double len() const {
+        return sqrt(x*x + y*y + z*z);
+    }
+
     Vec3<T> normalize() const {
         double mg = sqrt(x*x + y*y + z*z);
         return Vec3<T>(x/mg,y/mg,z/mg);
     }
 
     void clamp(double lower_bound, double upper_bound) {
-        x = clamp(x, lower_bound, upper_bound); 
-        y = clamp(y, lower_bound, upper_bound); 
-        z = clamp(z, lower_bound, upper_bound); 
+        x = clamp_(x, lower_bound, upper_bound); 
+        y = clamp_(y, lower_bound, upper_bound); 
+        z = clamp_(z, lower_bound, upper_bound); 
         return;
     }
 };
@@ -77,9 +88,9 @@ bool isZero(double x){
 }
 
 // Return True if Intersect a Cube
-bool intersectCubes(Ray& ray, Vec3i& index){
+bool intersectCubes(Ray& ray, Vec3i& index, double& now_t){
     double width = cubeWidth;
-    double now_t = ray.t;
+    now_t = ray.t;
     for(;;){
 
         Vec3d curr = ray(now_t);
@@ -117,6 +128,39 @@ bool intersectCubes(Ray& ray, Vec3i& index){
     // Always return in loops
 }
 
+Vec3d getNormal(Ray& ray, Vec3i index, double t){
+    std::vector< std::pair<double, Vec3d> > normal_list;
+    
+    double nx = index.x*cubeWidth,
+           ny = index.y*cubeWidth,
+           nz = index.z*cubeWidth;
+           
+    if(not isZero(ray.d.x)){
+        normal_list.push_back({(nx - ray.o.x)/ray.d.x, Vec3d(-1, 0, 0)});
+        normal_list.push_back({(nx+cubeWidth - ray.o.x)/ray.d.x, Vec3d(1, 0, 0)});
+    }
+
+    if(not isZero(ray.d.y)){
+        normal_list.push_back({(ny - ray.o.y)/ray.d.y, Vec3d(0, -1, 0)});
+        normal_list.push_back({(ny+cubeWidth - ray.o.y)/ray.d.y, Vec3d(0, 1, 0)});
+    }
+
+    if(not isZero(ray.d.z)){
+        normal_list.push_back({(nz - ray.o.z)/ray.d.z, Vec3d(0, 0, -1)});
+        normal_list.push_back({(nz+cubeWidth - ray.o.z)/ray.d.z, Vec3d(0, 0, 1)});
+    }
+
+
+    for(auto& p : normal_list){
+        p.first = std::abs(p.first - t);
+    }
+
+    std::sort(normal_list.begin(), normal_list.end());
+
+    assert(normal_list.size());
+    return normal_list[0].second;
+}
+
 int main(){
 
     const int H = 500;
@@ -126,9 +170,9 @@ int main(){
     const Vec3d black(0, 0, 0);
     const Vec3d red(255, 0, 0);
 
-    Cubes[8][8][0] = 1;
+    Cubes[8][8][1] = 1;
 
-    const Vec3d light(0, 0, 50);
+    const Vec3d light(500, 0, 0);
 
     std::ofstream out("out.ppm");
     out << "P3\n" << W << ' ' << H << ' ' << "255\n";
@@ -143,9 +187,15 @@ int main(){
             Ray ray(Vec3d(x,y,0), Vec3d(x, y, 0) - eye);
 
             Vec3i cubeIndex;
-            if(intersectCubes(ray, cubeIndex)){
-                pix_col = red;
-                //pix_col = clamp_(0, 255);
+            double tt;
+            if(intersectCubes(ray, cubeIndex, tt)){
+                Vec3d L = light - ray(tt);
+                Vec3d N = getNormal(ray, cubeIndex, tt); 
+                double dt = dot(L.normalize(), N.normalize());
+                double dis = L.len();
+
+                pix_col = (red + white*dt);
+                pix_col.clamp(0, 255);
             }
             out << (int)pix_col.x << ' '
                 << (int)pix_col.y << ' '
