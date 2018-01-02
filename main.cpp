@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <utility>
 #include <vector>
+#include <thread>
+#include <functional>
 
 #include "basic.h"
 #include "sampler.h"
@@ -34,10 +36,10 @@ struct Sphere {
 
 const int MAX_X = 50, MAX_Y = 50, MAX_Z = 50;
 const double cubeWidth = 50; // Cube size
-bool Cubes[MAX_X][MAX_Y][MAX_Z] = {0};
+int Cubes[MAX_X][MAX_Y][MAX_Z] = {0};
 
 // Return True if pos in [0, MAX_X)*[0, MAX_Y)*[0, MAX_Z)
-bool isOutOfWorld(Vec3d pos){
+bool isOutOfWorld(const Vec3d& pos){
     if(pos.x < 0 or pos.y < 0 or pos.z < 0) return true;
     if(pos.x >= MAX_X*cubeWidth or
        pos.y >= MAX_Y*cubeWidth or
@@ -88,7 +90,7 @@ bool intersectCubes(const Ray& ray, Vec3i& index, double& now_t){
     // Always return in loops
 }
 
-Vec3d getNormal(const Ray& ray, Vec3i index, double t){
+Vec3d getNormal(const Ray& ray, const Vec3i& index, double t){
     double nx = (index.x + .5)*cubeWidth,
            ny = (index.y + .5)*cubeWidth,
            nz = (index.z + .5)*cubeWidth;
@@ -107,7 +109,7 @@ Vec3d getNormal(const Ray& ray, Vec3i index, double t){
            
 }
 
-Ray reflect(const Ray& ray, Vec3i cubeIndex, double t){
+Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
     Vec3d I = ray.d;
     Vec3d N = getNormal(ray, cubeIndex, t);
 
@@ -132,7 +134,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         return black;
     }
 
-    const Sphere light1(Vec3d(500, 0, 1000), 500);
+    const Sphere light1(Vec3d(1800, 0, 1000), 500);
 
     Vec3i cubeIndex;
     double tt;
@@ -149,8 +151,8 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
 }
 
 int main(){
-    const int H = 500;
-    const int W = 500;
+    const int H = 512;
+    const int W = 512;
 
     for(int lx = 0;lx < MAX_X;lx++)
         for(int lz = 0;lz < MAX_Z;lz++){
@@ -159,38 +161,64 @@ int main(){
                 Cubes[lx][8][lz] = 1;
         }
 
+    double t;
+    
+    Vec3d eye(W/2, H/2, -512);
+    Vec3d pic[H][W];
+
+    auto sample_function = [&pic, eye](int id){
+        for(int y = 0; y < H; ++y){
+            std::cout << y*100/H << "%\r";
+            std::cout << std::flush;
+
+            for(int _x = 0; _x < W/4; ++_x){
+
+                int x = _x*4 + id;
+
+                const int SAMPLE_COUNT = 16;
+
+                double sx[SAMPLE_COUNT], sy[SAMPLE_COUNT];
+                samplesSquare(sx, sy, SAMPLE_COUNT);
+
+                Vec3d col;
+
+                for(int lx = 0;lx < SAMPLE_COUNT;lx++){
+                    int cid = lx;
+                    Ray ray(Vec3d(x+sx[cid] + 1300,y+sy[cid],0), Vec3d(x+sx[cid], y+sy[cid], 0) - eye);
+                    col = col + rayTracing(ray);
+                }
+
+                col = col/SAMPLE_COUNT;
+                col = col*255;
+                
+                pic[y][x] = col;
+            }
+        }
+    };
+    
+    std::thread ths[4];
+
+    for(int lx = 0;lx < 4;lx++){
+        ths[lx] = std::thread(sample_function, lx); 
+    }
+
+    for(int lx = 0;lx < 4;lx++){
+        ths[lx].join();
+    }
+
     std::ofstream out("out.ppm");
     out << "P3\n" << W << ' ' << H << ' ' << "255\n";
 
-    double t;
-    
-    Vec3d eye(W/2, H/2, -500);
-
-    for (int y = 0; y < H; ++y){
-        std::cout << y*100/H << "%\r";
-        std::cout << std::flush;
-
-        for (int x = 0; x < W; ++x){
-
-            Vec3d col;
-
-            const int SAMPLE_COUNT = 64;
-
-            for(int s = 0;s < SAMPLE_COUNT;s++){ 
-                double sx, sy;
-                sampleSquare(sx, sy);
-                Ray ray(Vec3d(x+sx,y+sy,0), Vec3d(x+sx, y+sy, 0) - eye);
-                col = col + rayTracing(ray);
-            }
-
-            col = col/SAMPLE_COUNT;
-            col = col*255;
-
+    for(int ly = 0;ly < H;ly++){
+        for(int lx = 0;lx < W;lx++){
+            auto& col = pic[ly][lx];
             out << (int)col.x << ' '
                 << (int)col.y << ' '
                 << (int)col.z << '\n';
         }
     }
+
+    out.close();
 
     std::cout << std::endl;
     return 0;
