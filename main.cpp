@@ -8,64 +8,29 @@
 #include <utility>
 #include <vector>
 
-double clamp_(double x, double l, double u){
-    return (x < l) ? l : ((x > u) ? u : x);
-}
+#include "basic.h"
+#include "sampler.h"
 
-template<typename T>
-struct Vec3 {
-    T x,y,z;
-    Vec3<T>(T x = 0, T y = 0, T z = 0) : x(x), y(y), z(z) {}
-    Vec3<T> operator + (const Vec3<T>& v) const { return Vec3<T>(x+v.x, y+v.y, z+v.z); }
-    Vec3<T> operator - (const Vec3<T>& v) const { return Vec3<T>(x-v.x, y-v.y, z-v.z); }
-    Vec3<T> operator * (T d) const { return Vec3<T>(x*d, y*d, z*d); }
-    Vec3<T> operator / (T d) const { return Vec3<T>(x/d, y/d, z/d); }
-
-    bool operator < (const Vec3<T>& v) const {
-        return std::tie(x, y, z) < std::tie(v.x, v.y, v.z);
-    }
-
-    double len() const {
-        return sqrt(x*x + y*y + z*z);
-    }
-
-    Vec3<T> normalize() const {
-        double mg = sqrt(x*x + y*y + z*z);
-        return Vec3<T>(x/mg,y/mg,z/mg);
-    }
-
-    void clamp(double lower_bound, double upper_bound) {
-        x = clamp_(x, lower_bound, upper_bound); 
-        y = clamp_(y, lower_bound, upper_bound); 
-        z = clamp_(z, lower_bound, upper_bound); 
-        return;
+struct Sphere {
+    Vec3d c;
+    double r;
+    Sphere(const Vec3d& c, double r) : c(c), r(r) {}
+    Vec3d getNormal(const Vec3d& pi) const { return (pi - c) / r; }
+    bool intersect(const Ray& ray, double &t) const {
+        const Vec3d o = ray.o;
+        const Vec3d d = ray.d;
+        const Vec3d oc = o - c;
+        const double b = 2 * dot(oc, d);
+        const double c = dot(oc, oc) - r*r;
+        double disc = b*b - 4 * c;
+        if (disc < 1e-4) return false;
+        disc = sqrt(disc);
+        const double t0 = -b - disc;
+        const double t1 = -b + disc;
+        t = (t0 < t1) ? t0 : t1;
+        return true;
     }
 };
-
-template<typename T>
-std::ostream& operator<<(std::ostream& o, const Vec3<T>& v){
-    o << "(" << v.x << "," << v.y << "," << v.z << ")";
-    return o;
-}
-
-template<typename T>
-T dot(const Vec3<T>& a, const Vec3<T>& b) {
-    return (a.x*b.x + a.y*b.y + a.z*b.z);
-}
-
-typedef Vec3<double> Vec3d;
-typedef Vec3<int> Vec3i;
-
-struct Ray {
-    Vec3d o,d;
-    double t;
-    Ray(const Vec3d& o, const Vec3d& d, double t = 0) : o(o), d(d.normalize()), t(t) {}
-
-    Vec3d operator()(double _t) const{
-        return o + d*_t;
-    }
-};
-
 
 const int MAX_X = 50, MAX_Y = 50, MAX_Z = 50;
 const double cubeWidth = 50; // Cube size
@@ -82,13 +47,8 @@ bool isOutOfWorld(Vec3d pos){
     return false;
 }
 
-// Return True if |x| < eps
-bool isZero(double x){
-    return std::abs(x) < std::numeric_limits<double>::min();
-}
-
 // Return True if Intersect a Cube
-bool intersectCubes(Ray& ray, Vec3i& index, double& now_t){
+bool intersectCubes(const Ray& ray, Vec3i& index, double& now_t){
     double width = cubeWidth;
     now_t = ray.t;
     for(;;){
@@ -128,7 +88,7 @@ bool intersectCubes(Ray& ray, Vec3i& index, double& now_t){
     // Always return in loops
 }
 
-Vec3d getNormal(Ray& ray, Vec3i index, double t){
+Vec3d getNormal(const Ray& ray, Vec3i index, double t){
     std::vector< std::pair<double, Vec3d> > normal_list;
     
     double nx = index.x*cubeWidth,
@@ -161,18 +121,57 @@ Vec3d getNormal(Ray& ray, Vec3i index, double t){
     return normal_list[0].second;
 }
 
-int main(){
+Ray reflect(const Ray& ray, Vec3i cubeIndex, double t){
+    Vec3d I = ray.d;
+    Vec3d N = getNormal(ray, cubeIndex, t);
 
+    double sx, sy;
+    sampleSquare(sx, sy);
+
+    if(isZero(std::abs(N.x) - 1)) N.y = sx, N.z = sy;
+    else if(isZero(std::abs(N.y) - 1)) N.x = sx, N.z = sy;
+    else if(isZero(std::abs(N.z) - 1)) N.y = sx, N.x = sy;
+
+    double dt = dot(I.normalize()*(-1), N.normalize());
+
+    return Ray(ray(t), N*dt*2 + ray.d, 0.01);
+}
+
+Vec3d rayTracing(const Ray& ray, int level = 0){
+    const Vec3d white(1, 1, 1);
+    const Vec3d black(0, 0, 0);
+    const Vec3d red(1, 0, 0);
+
+    if(level >= 10){
+        return black;
+    }
+
+    const Sphere light(Vec3d(500, 0, 500), 100);
+
+    Vec3i cubeIndex;
+    double tt;
+
+    if(light.intersect(ray, tt)){
+        return white;
+    }
+
+    if(intersectCubes(ray, cubeIndex, tt)){
+        return rayTracing(reflect(ray, cubeIndex, tt), level+1)*red*0.95;
+    }
+
+    return black;
+}
+
+int main(){
     const int H = 500;
     const int W = 500;
 
-    const Vec3d white(255, 255, 255);
-    const Vec3d black(0, 0, 0);
-    const Vec3d red(255, 0, 0);
-
-    Cubes[8][8][1] = 1;
-
-    const Vec3d light(500, 0, 0);
+    for(int lx = 0;lx < MAX_X;lx++)
+        for(int lz = 0;lz < MAX_Z;lz++){
+            Cubes[lx][7][lz] = 1;
+            if(lx&1 and lz&1)
+                Cubes[lx][6][lz] = 1;
+        }
 
     std::ofstream out("out.ppm");
     out << "P3\n" << W << ' ' << H << ' ' << "255\n";
@@ -183,23 +182,25 @@ int main(){
 
     for (int y = 0; y < H; ++y){
         for (int x = 0; x < W; ++x){
-            Vec3d pix_col(black);
-            Ray ray(Vec3d(x,y,0), Vec3d(x, y, 0) - eye);
+            std::cout << "\r" << y*W + x << "/" << W*H;
 
-            Vec3i cubeIndex;
-            double tt;
-            if(intersectCubes(ray, cubeIndex, tt)){
-                Vec3d L = light - ray(tt);
-                Vec3d N = getNormal(ray, cubeIndex, tt); 
-                double dt = dot(L.normalize(), N.normalize());
-                double dis = L.len();
+            Vec3d col;
 
-                pix_col = (red + white*dt);
-                pix_col.clamp(0, 255);
+            for(int s = 0;s < 64;s++){ 
+                double sx, sy;
+                sampleSquare(sx, sy);
+                Ray ray(Vec3d(x+sx,y+sy,0), Vec3d(x+sx, y+sy, 0) - eye);
+                col = col + rayTracing(ray);
             }
-            out << (int)pix_col.x << ' '
-                << (int)pix_col.y << ' '
-                << (int)pix_col.z << '\n';
+
+            col = col/32.;
+            col = col*255;
+
+            out << (int)col.x << ' '
+                << (int)col.y << ' '
+                << (int)col.z << '\n';
         }
     }
+    std::cout << std::endl;
+    return 0;
 }
