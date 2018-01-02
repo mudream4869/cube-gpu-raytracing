@@ -2,7 +2,7 @@
 
 void sampleSquare(double& x, double& y){
     std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(1, 999);
+    std::uniform_int_distribution<int> uniform_dist(0, 1000);
     std::default_random_engine e1(r());
 
     int nx = uniform_dist(e1), ny = uniform_dist(e1);
@@ -11,14 +11,21 @@ void sampleSquare(double& x, double& y){
     return;
 }
 
+
+// |Sample| = n*n
 void samplesSquare(double* x, double* y, int n){
     std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(1, 999);
+    std::uniform_int_distribution<int> uniform_dist(0, 1000);
     std::default_random_engine e1(r());
     
+    double delta = 1./n;
+     
     for(int lx = 0;lx < n;lx++){
-        int nx = uniform_dist(e1), ny = uniform_dist(e1);
-        x[lx] = nx/1000., y[lx] = ny/1000.;
+        for(int ly = 0;ly < n;ly++){
+            int nx = uniform_dist(e1), ny = uniform_dist(e1);
+            x[lx*n + ly] = delta*lx + nx/1000./n;
+            y[lx*n + ly] = delta*ly + ny/1000./n;
+        }
     }
 
     return;
@@ -26,7 +33,7 @@ void samplesSquare(double* x, double* y, int n){
 
 void sampleLine(double &x){
     std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(1, 999);
+    std::uniform_int_distribution<int> uniform_dist(0, 1000);
     std::default_random_engine e1(r());
 
     int nx = uniform_dist(e1);

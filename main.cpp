@@ -103,6 +103,7 @@ Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
 
     double sx, sy;
     sampleSquare(sx, sy);
+    sx *= 0.1, sy *= 0.1;
 
     if(isZero(std::abs(N.x) - 1)) N.y = sx, N.z = sy;
     else if(isZero(std::abs(N.y) - 1)) N.x = sx, N.z = sy;
@@ -132,7 +133,9 @@ Ray patrenate(const Ray& ray, const Vec3i& cubeIndex, double t){
     if(not isZero(ray.d.y)) min_t = std::min((n_y - ray.o.y)/ray.d.y, min_t);
     if(not isZero(ray.d.z)) min_t = std::min((n_z - ray.o.z)/ray.d.z, min_t);
 
-    return Ray(ray.o, ray.d, min_t + 0.01); 
+    assert(min_t < std::numeric_limits<double>::infinity());
+
+    return Ray(ray(min_t), ray.d, 0.01); 
 }
 
 Vec3d rayTracing(const Ray& ray, int level = 0){
@@ -142,7 +145,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
     const Vec3d green(0, 1, 0);
     const Vec3d brown(139/255.,69/255.,19/255.);
 
-    if(level >= 10){
+    if(level >= 3){
         return black;
     }
 
@@ -153,16 +156,26 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         int cube_id = getCube(cubeIndex);
         
         if(cube_id == CUBE_LIGHT){
-            if(level)
+//            if(level)
                 return white;
-            else
-                return rayTracing(patrenate(ray, cubeIndex, tt), level);
+//            else
+//                return rayTracing(patrenate(ray, cubeIndex, tt), level);
         }
 
         Vec3d cube_color;
         if(cube_id == CUBE_MUD)   cube_color = brown;
         if(cube_id == CUBE_GRASS) cube_color = green;
-        return rayTracing(reflect(ray, cubeIndex, tt), level+1)*cube_color;
+
+        const int RAY_COUNT = 3;
+
+        Vec3d ret;
+        for(int lx = 0;lx < RAY_COUNT;lx++){
+            ret = ret + rayTracing(reflect(ray, cubeIndex, tt), level+1);
+        }
+
+        ret = ret*cube_color;
+        ret = ret/RAY_COUNT;
+        return ret;
     }
 
     return black;
@@ -174,35 +187,37 @@ int main(){
 
     for(int lx = 0;lx < MAX_X;lx++)
         for(int lz = 0;lz < MAX_Z;lz++){
-            Cubes[lx][9][lz] = CUBE_MUD;
+            Cubes[lx][10][lz] = CUBE_MUD;
             if(lx%2 == 1 and lz%2 == 1)
-                Cubes[lx][8][lz] = CUBE_GRASS;
-            if(lx%4 == 0 and lz%4 == 0)
-                Cubes[lx][8][lz] = CUBE_LIGHT;
+                Cubes[lx][9][lz] = CUBE_GRASS,
+                Cubes[lx][0][lz] = CUBE_LIGHT;
         }
-
+    
     double t;
     
     Vec3d eye(W/2, H/2, -512);
     Vec3d pic[H][W];
 
-    auto sample_function = [&pic, eye](int id){
+    const int SAMPLE_COUNT = 4;
+    const int THREAD_COUNT = 8;
+
+    assert(W%THREAD_COUNT == 0);
+
+    auto sample_function = [&pic, eye, SAMPLE_COUNT, THREAD_COUNT](int id){
         for(int y = 0; y < H; ++y){
             std::cout << y*100/H << "%\r";
             std::cout << std::flush;
 
-            for(int _x = 0; _x < W/4; ++_x){
+            for(int _x = 0; _x < W/THREAD_COUNT; ++_x){
 
-                int x = _x*4 + id;
+                int x = _x*THREAD_COUNT + id;
 
-                const int SAMPLE_COUNT = 128;
-
-                double sx[SAMPLE_COUNT], sy[SAMPLE_COUNT];
+                double sx[SAMPLE_COUNT*SAMPLE_COUNT], sy[SAMPLE_COUNT*SAMPLE_COUNT];
                 samplesSquare(sx, sy, SAMPLE_COUNT);
 
                 Vec3d col;
 
-                for(int lx = 0;lx < SAMPLE_COUNT;lx++){
+                for(int lx = 0;lx < SAMPLE_COUNT*SAMPLE_COUNT;lx++){
                     int cid = lx;
                     Ray ray(Vec3d(x+sx[cid] + 1300,y+sy[cid],0), Vec3d(x+sx[cid], y+sy[cid], 0) - eye);
                     col = col + rayTracing(ray);
@@ -213,13 +228,13 @@ int main(){
         }
     };
     
-    std::thread ths[4];
+    std::thread ths[THREAD_COUNT];
 
-    for(int lx = 0;lx < 4;lx++){
+    for(int lx = 0;lx < THREAD_COUNT;lx++){
         ths[lx] = std::thread(sample_function, lx); 
     }
 
-    for(int lx = 0;lx < 4;lx++){
+    for(int lx = 0;lx < THREAD_COUNT;lx++){
         ths[lx].join();
     }
 
