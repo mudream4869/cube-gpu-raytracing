@@ -13,6 +13,8 @@
 #include "basic.h"
 #include "sampler.h"
 
+#include "bitmap_image.hpp"
+
 const int MAX_X = 50, MAX_Y = 50, MAX_Z = 50;
 const double cubeWidth = 50; // Cube size
 int Cubes[MAX_X][MAX_Y][MAX_Z] = {0};
@@ -145,7 +147,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
     const Vec3d green(0, 1, 0);
     const Vec3d brown(139/255.,69/255.,19/255.);
 
-    if(level >= 4){
+    if(level >= 2){
         return black;
     }
 
@@ -163,7 +165,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         if(cube_id == CUBE_MUD)   cube_color = brown;
         if(cube_id == CUBE_GRASS) cube_color = green;
 
-        const int RAY_COUNT = 4;
+        const int RAY_COUNT = 2;
 
         Vec3d ret;
         for(int lx = 0;lx < RAY_COUNT;lx++){
@@ -195,7 +197,7 @@ int main(){
     Vec3d eye(W/2, H/2, -512);
     Vec3d pic[H][W];
 
-    const int SAMPLE_COUNT = 16;
+    const int SAMPLE_COUNT = 1;
     const int THREAD_COUNT = 4;
 
     assert(W%THREAD_COUNT == 0);
@@ -235,20 +237,22 @@ int main(){
         ths[lx].join();
     }
 
-    std::ofstream out("out.ppm");
-    out << "P3\n" << W << ' ' << H << ' ' << "255\n";
+    bitmap_image image(W, H);
 
     for(int ly = 0;ly < H;ly++){
         for(int lx = 0;lx < W;lx++){
             auto& col = pic[ly][lx];
             col = col*255;
-            out << (int)col.x << ' '
-                << (int)col.y << ' '
-                << (int)col.z << '\n';
+            rgb_t c;
+            c.red = col.x; 
+            c.green = col.y; 
+            c.blue = col.z;
+ 
+            image.set_pixel(lx, ly, c);
         }
     }
 
-    out.close();
+    image.save_image("out.bmp");
 
     std::cout << std::endl;
     return 0;
