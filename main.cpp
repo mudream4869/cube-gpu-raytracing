@@ -102,7 +102,7 @@ Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
     Vec3d N = getNormal(ray, cubeIndex, t);
 
     double sx, sy;
-    sampleSquare(sx, sy);
+    sampleCircle(sx, sy);
     sx *= 0.1, sy *= 0.1;
 
     if(isZero(std::abs(N.x) - 1)) N.y = sx, N.z = sy;
@@ -145,7 +145,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
     const Vec3d green(0, 1, 0);
     const Vec3d brown(139/255.,69/255.,19/255.);
 
-    if(level >= 3){
+    if(level >= 4){
         return black;
     }
 
@@ -156,17 +156,14 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         int cube_id = getCube(cubeIndex);
         
         if(cube_id == CUBE_LIGHT){
-//            if(level)
-                return white;
-//            else
-//                return rayTracing(patrenate(ray, cubeIndex, tt), level);
+            return white;
         }
 
         Vec3d cube_color;
         if(cube_id == CUBE_MUD)   cube_color = brown;
         if(cube_id == CUBE_GRASS) cube_color = green;
 
-        const int RAY_COUNT = 3;
+        const int RAY_COUNT = 4;
 
         Vec3d ret;
         for(int lx = 0;lx < RAY_COUNT;lx++){
@@ -198,8 +195,8 @@ int main(){
     Vec3d eye(W/2, H/2, -512);
     Vec3d pic[H][W];
 
-    const int SAMPLE_COUNT = 4;
-    const int THREAD_COUNT = 8;
+    const int SAMPLE_COUNT = 16;
+    const int THREAD_COUNT = 4;
 
     assert(W%THREAD_COUNT == 0);
 
@@ -223,7 +220,7 @@ int main(){
                     col = col + rayTracing(ray);
                 }
 
-                pic[y][x] = col/SAMPLE_COUNT;
+                pic[y][x] = col/SAMPLE_COUNT/SAMPLE_COUNT;
             }
         }
     };

@@ -11,6 +11,15 @@ void sampleSquare(double& x, double& y){
     return;
 }
 
+void sampleCircle(double& x, double& y){
+    double r, theta;                                                                                                                   
+    sampleSquare(r, theta);
+    r = std::sqrt(r);
+    theta *= 2*3.1415926*theta;
+    x = r*std::cos(r);
+    y = r*std::sin(r);
+    return;
+}
 
 // |Sample| = n*n
 void samplesSquare(double* x, double* y, int n){
