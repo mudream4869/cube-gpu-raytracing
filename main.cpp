@@ -48,9 +48,6 @@ bool intersectCubes(const Ray& ray, Vec3i& index, double& now_t){
 
         Vec3d curr = ray(now_t);
 
-        //std::cout << curr << std::endl;
-        //std::cout << ray.d << std::endl;
-
         if(isOutOfWorld(curr)){
             return false;
         }
@@ -102,42 +99,22 @@ Vec3d getNormal(const Ray& ray, const Vec3i& index, double t){
 Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
     Vec3d I = ray.d;
     Vec3d N = getNormal(ray, cubeIndex, t);
-
+    
+    // Scattering
     double sx, sy;
     sampleCircle(sx, sy);
+    sx -= 0.5, sy -= 0.5;
     sx *= 0.1, sy *= 0.1;
 
     if(isZero(std::abs(N.x) - 1)) N.y = sx, N.z = sy;
     else if(isZero(std::abs(N.y) - 1)) N.x = sx, N.z = sy;
     else if(isZero(std::abs(N.z) - 1)) N.y = sx, N.x = sy;
 
-    double dt = dot(I.normalize()*(-1), N.normalize());
+    N = N.normalize();
 
-    return Ray(ray(t), N*dt*2 + ray.d, 0.01);
-}
+    double dt = -dot(I, N);
 
-Ray patrenate(const Ray& ray, const Vec3i& cubeIndex, double t){
-    Vec3d curr = ray(t);
-
-    int d_x = floor(curr.x/cubeWidth),
-        d_y = floor(curr.y/cubeWidth),
-        d_z = floor(curr.z/cubeWidth);
-
-    double n_x = d_x*cubeWidth, n_y = d_y*cubeWidth, n_z = d_z*cubeWidth;
-
-    if(ray.d.x > 0) n_x += cubeWidth;
-    if(ray.d.y > 0) n_y += cubeWidth;
-    if(ray.d.z > 0) n_z += cubeWidth;
-
-    double min_t = std::numeric_limits<double>::infinity();
-
-    if(not isZero(ray.d.x)) min_t = std::min((n_x - ray.o.x)/ray.d.x, min_t);
-    if(not isZero(ray.d.y)) min_t = std::min((n_y - ray.o.y)/ray.d.y, min_t);
-    if(not isZero(ray.d.z)) min_t = std::min((n_z - ray.o.z)/ray.d.z, min_t);
-
-    assert(min_t < std::numeric_limits<double>::infinity());
-
-    return Ray(ray(min_t), ray.d, 0.01); 
+    return Ray(ray(t), N*dt*2 + I, 0.01);
 }
 
 Vec3d rayTracing(const Ray& ray, int level = 0){
@@ -147,13 +124,14 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
     const Vec3d green(0, 1, 0);
     const Vec3d brown(139/255.,69/255.,19/255.);
 
-    if(level >= 2){
+    if(level >= 4){
         return black;
     }
 
     Vec3i cubeIndex;
     double tt;
 
+    // Only Intersect with Cubes
     if(intersectCubes(ray, cubeIndex, tt)){
         int cube_id = getCube(cubeIndex);
         
@@ -165,7 +143,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
         if(cube_id == CUBE_MUD)   cube_color = brown;
         if(cube_id == CUBE_GRASS) cube_color = green;
 
-        const int RAY_COUNT = 2;
+        const int RAY_COUNT = 3;
 
         Vec3d ret;
         for(int lx = 0;lx < RAY_COUNT;lx++){
@@ -180,7 +158,8 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
     return black;
 }
 
-int main(){
+int main(int argc, char** argv){
+
     const int H = 512;
     const int W = 512;
 
@@ -197,8 +176,8 @@ int main(){
     Vec3d eye(W/2, H/2, -512);
     Vec3d pic[H][W];
 
-    const int SAMPLE_COUNT = 1;
-    const int THREAD_COUNT = 4;
+    int SAMPLE_COUNT = 2;
+    int THREAD_COUNT = 4;
 
     assert(W%THREAD_COUNT == 0);
 
@@ -227,7 +206,7 @@ int main(){
         }
     };
     
-    std::thread ths[THREAD_COUNT];
+    std::vector<std::thread> ths(THREAD_COUNT);
 
     for(int lx = 0;lx < THREAD_COUNT;lx++){
         ths[lx] = std::thread(sample_function, lx); 
