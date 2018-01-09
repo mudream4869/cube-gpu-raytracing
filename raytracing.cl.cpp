@@ -36,7 +36,7 @@ int getRand(int* prng){
 // Return Random in [0, 1)
 double sample(int* prng){
     int a = getRand(prng)%12345678;
-    return a/12345678;
+    return a/12345678.;
 }
 
 int isZero(double x){
