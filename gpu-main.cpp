@@ -6,6 +6,7 @@
 #define __CL_ENABLE_EXCEPTIONS
 #include <CL/cl.hpp>
 
+#include "bitmap_image.hpp"
 #include "sampler.h"
 
 typedef unsigned char uchar;
@@ -137,23 +138,26 @@ int main() {
 	// Launch kernel on the compute device.
 	queue.enqueueNDRangeKernel(draw, cl::NullRange, H*W, cl::NullRange);
 
+    std::cout << "Run Ok" << std::endl;
+
 	// Get result back to host.
 	queue.enqueueReadBuffer(R, CL_TRUE, 0, pic_r.size() * sizeof(uchar), pic_r.data());
 	queue.enqueueReadBuffer(G, CL_TRUE, 0, pic_g.size() * sizeof(uchar), pic_g.data());
 	queue.enqueueReadBuffer(B, CL_TRUE, 0, pic_b.size() * sizeof(uchar), pic_b.data());
 
-    std::ofstream out("out.ppm");
-    out << "P3\n" << W << ' ' << H << ' ' << "255\n";
+    bitmap_image image(W, H);
 
     for(int ly = 0;ly < H;ly++){
         for(int lx = 0;lx < W;lx++){
-            out << (int)pic_r[ly*W + lx] << ' '
-                << (int)pic_g[ly*W + lx] << ' '
-                << (int)pic_b[ly*W + lx] << '\n';
+            rgb_t c;
+            c.red = pic_r[ly*W + lx];
+            c.green = pic_g[ly*W + lx];
+            c.blue = pic_b[ly*W + lx];
+            image.set_pixel(lx, ly, c);
         }
     }
 
-    out.close();
+    image.save_image("out.bmp");
 
     } catch (const cl::Error &err) {
 	std::cerr

@@ -25,6 +25,20 @@ typedef struct _Ray Ray;
 
 __constant int SAMPLE_COUNT = 2;
 
+int getRand(int* prng){
+    (*prng) = (*prng)*8763;
+    (*prng) %= 1000000007;
+    (*prng) ^= 0xdeadbeef;
+    if((*prng) < 0) (*prng) = -(*prng);
+    return *prng;
+}
+
+// Return Random in [0, 1)
+double sample(int* prng){
+    int a = getRand(prng)%12345678;
+    return a/12345678;
+}
+
 int isZero(double x){
     return fabs(x) < 0.000001;
 }
@@ -38,7 +52,7 @@ int getCube(const global int* Cubes, uint3 i){
 }
 
 // Return True if pos in [0, MAX_X)*[0, MAX_Y)*[0, MAX_Z)
-bool isOutOfWorld(double3 pos){
+int isOutOfWorld(double3 pos){
     if(pos.x < 0 || pos.y < 0 || pos.z < 0) return 1;
     if(pos.x >= MAX_X*cubeWidth ||
        pos.y >= MAX_Y*cubeWidth ||
@@ -49,12 +63,12 @@ bool isOutOfWorld(double3 pos){
 }
 
 // Return True if Intersect a Cube
-int intersectCubes(const global int* Cubes, Ray ray, uint3* index, double now_t){
+int intersectCubes(const global int* Cubes, Ray ray, uint3* index, double* now_t){
     double width = cubeWidth;
-    now_t = ray.t;
+    (*now_t) = ray.t;
     for(;;){
 
-        double3 curr = callRay(ray, now_t);
+        double3 curr = callRay(ray, (*now_t));
 
         if(isOutOfWorld(curr)){
             return 0;
@@ -68,7 +82,7 @@ int intersectCubes(const global int* Cubes, Ray ray, uint3* index, double now_t)
             index->x = d_x;
             index->y = d_y;
             index->z = d_z;
-            return true;
+            return 1;
         }
         
         double n_x = d_x*width, n_y = d_y*width, n_z = d_z*width;
@@ -77,13 +91,13 @@ int intersectCubes(const global int* Cubes, Ray ray, uint3* index, double now_t)
         if(ray.d.y > 0) n_y += width;
         if(ray.d.z > 0) n_z += width;
 
-        double min_t = 100000; 
+        double min_t = 100000000;
 
         if(!isZero(ray.d.x)) min_t = min((n_x - ray.o.x)/ray.d.x, min_t);
         if(!isZero(ray.d.y)) min_t = min((n_y - ray.o.y)/ray.d.y, min_t);
         if(!isZero(ray.d.z)) min_t = min((n_z - ray.o.z)/ray.d.z, min_t);
 
-        now_t = min_t + 0.0001;
+        (*now_t) = min_t + 0.0001;
     }
     // Always return in loops
 }
@@ -104,20 +118,25 @@ double3 getNormal(Ray ray, uint3 index, double t){
     return (double3)(0, 0, r.z > 0 ? 1 : -1);
 }
 
-Ray reflect(Ray ray, uint3 cubeIndex, double t){
+Ray reflect(int* prng, Ray ray, uint3 cubeIndex, double t){
     double3 I = ray.d;
     double3 N = getNormal(ray, cubeIndex, t);
 
-    double dt = -dot(normalize(I), normalize(N));
+    double sx = sample(prng), sy = sample(prng);
+    sx *= 0.3, sy *= 0.3;
+    if(isZero(fabs(N.x) - 1)) N.y = sx, N.z = sy;
+    else if(isZero(fabs(N.y) - 1)) N.x = sx, N.z = sy;
+    else if(isZero(fabs(N.z) - 1)) N.y = sx, N.x = sy;
 
-    Ray ret;
-    ret.o = callRay(ray, t);
-    ret.d = normalize(N*dt*2 + ray.d);
-    ret.t = 0.01;
+    N = normalize(N);
+
+    double dt = -dot(I, N);
+
+    Ray ret = {callRay(ray, t), normalize(N*dt*2 + I), 0.01};
     return ret; 
 }
 
-double3 rayTracing(const global int* Cubes, Ray ray, int level){
+double3 rayTracing(const global int* Cubes, int* prng, Ray ray, int level){
     const double3 white = (double3)(1, 1, 1);
     const double3 black = (double3)(0, 0, 0);
     const double3 red = (double3)(1, 0, 0);
@@ -131,7 +150,7 @@ double3 rayTracing(const global int* Cubes, Ray ray, int level){
     uint3 cubeIndex;
     double tt;
 
-    if(intersectCubes(Cubes, ray, &cubeIndex, tt)){
+    if(intersectCubes(Cubes, ray, &cubeIndex, &tt)){
         int cube_id = getCube(Cubes, cubeIndex);
         
         if(cube_id == CUBE_LIGHT){
@@ -144,9 +163,9 @@ double3 rayTracing(const global int* Cubes, Ray ray, int level){
 
         const int RAY_COUNT = 4;
 
-        double3 ret;
+        double3 ret = (double3)(0, 0, 0);
         for(int lx = 0;lx < RAY_COUNT;lx++){
-            ret = ret + rayTracing(Cubes, reflect(ray, cubeIndex, tt), level+1);
+            ret = ret + rayTracing(Cubes, prng, reflect(prng, ray, cubeIndex, tt), level+1);
         }
 
         ret = ret*cube_color;
@@ -169,6 +188,7 @@ kernel void draw(
 ){
 
     size_t i = get_global_id(0);
+    int prng = i;
     
     if(i >= H*W){
         return;
@@ -176,17 +196,19 @@ kernel void draw(
 
     int x = i%W, y = i/W;
 
-    double3 col;
+    double3 col = (double3)(0, 0, 0);
 
     for(int lx = 0;lx < SAMPLE_COUNT*SAMPLE_COUNT;lx++){
         Ray ray = {(double3)(x+sx[lx] + 1300,y+sy[lx],0),
-                   (double3)(x+sx[lx] - W/2, y+sy[lx] - H/2, 512)};
-        col = col + rayTracing(Cubes, ray, 0);
+                   normalize((double3)(x+sx[lx] - W/2, y+sy[lx] - H/2, 512)),
+                   0};
+        col = col + rayTracing(Cubes, &prng, ray, 0);
     }
 
     col /= SAMPLE_COUNT*SAMPLE_COUNT;
 
-    pic_r[y*W + x] = col.x*255;
-    pic_g[y*W + x] = col.y*255;
-    pic_b[y*W + x] = col.z*255;
+    pic_r[y*W + x] = (int)(col.x*255);
+    pic_g[y*W + x] = (int)(col.y*255);
+    pic_b[y*W + x] = (int)(col.z*255);
+    return;
 }
