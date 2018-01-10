@@ -23,7 +23,7 @@ struct _Ray{
 
 typedef struct _Ray Ray;
 
-__constant int SAMPLE_COUNT = 2;
+#define SAMPLE_COUNT 4
 
 int getRand(int* prng){
     (*prng) = (*prng)*8763;
@@ -37,6 +37,18 @@ int getRand(int* prng){
 double sample(int* prng){
     int a = getRand(prng)%12345678;
     return a/12345678.;
+}
+
+// |Sample| = n*n
+void samplesSquare(int* prng, local double* x, local double* y, int n){
+    double delta = 1./n;
+    for(int lx = 0;lx < n;lx++){
+        for(int ly = 0;ly < n;ly++){
+            x[lx*n + ly] = delta*(lx + sample(prng));
+            y[lx*n + ly] = delta*(ly + sample(prng));
+        }
+    }
+    return;
 }
 
 int isZero(double x){
@@ -123,6 +135,7 @@ Ray reflect(int* prng, Ray ray, uint3 cubeIndex, double t){
     double3 N = getNormal(ray, cubeIndex, t);
 
     double sx = sample(prng), sy = sample(prng);
+    sx -= 0.5, sy -= 0.5;
     sx *= 0.3, sy *= 0.3;
     if(isZero(fabs(N.x) - 1)) N.y = sx, N.z = sy;
     else if(isZero(fabs(N.y) - 1)) N.x = sx, N.z = sy;
@@ -182,11 +195,8 @@ kernel void draw(
     global unsigned char *pic_r,
     global unsigned char *pic_g,
     global unsigned char *pic_b,
-    const global int* Cubes,
-    const global double* sx,
-    const global double* sy
+    const global int* Cubes
 ){
-
     size_t i = get_global_id(0);
     int prng = i;
     
@@ -194,9 +204,13 @@ kernel void draw(
         return;
     }
 
+    local double sx[SAMPLE_COUNT*SAMPLE_COUNT], sy[SAMPLE_COUNT*SAMPLE_COUNT];
+
     int x = i%W, y = i/W;
 
     double3 col = (double3)(0, 0, 0);
+
+    samplesSquare(&prng, sx, sy, SAMPLE_COUNT);
 
     for(int lx = 0;lx < SAMPLE_COUNT*SAMPLE_COUNT;lx++){
         Ray ray = {(double3)(x+sx[lx] + 1300,y+sy[lx],0),

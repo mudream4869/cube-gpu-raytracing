@@ -95,11 +95,6 @@ int main() {
     
     char* pic[H][W];
 
-    const int SAMPLE_COUNT = 2;
-    const int RS = SAMPLE_COUNT*SAMPLE_COUNT;
-    double sx[SAMPLE_COUNT*SAMPLE_COUNT], sy[SAMPLE_COUNT*SAMPLE_COUNT];
-    samplesSquare(sx, sy, SAMPLE_COUNT);
-
 	std::vector<uchar> pic_r(H*W), pic_g(H*W), pic_b(H*W);
 
     int MAX_X = 50, MAX_Y = 50, MAX_Z = 50;
@@ -119,9 +114,6 @@ int main() {
 	cl::Buffer G(context, CL_MEM_READ_WRITE, pic_g.size() * sizeof(uchar), pic_g.data());
 	cl::Buffer B(context, CL_MEM_READ_WRITE, pic_b.size() * sizeof(uchar), pic_b.data());
 
-	cl::Buffer SX(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, RS * sizeof(double), sx);
-	cl::Buffer SY(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, RS * sizeof(double), sy);
-
 	cl::Buffer CUBES(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Cubes.size() * sizeof(int), Cubes.data());
 
 	cl::Kernel draw(program, "draw");
@@ -132,8 +124,6 @@ int main() {
 	draw.setArg(3, G);
 	draw.setArg(4, B);
 	draw.setArg(5, CUBES);
-	draw.setArg(6, SX);
-	draw.setArg(7, SY);
 
 	// Launch kernel on the compute device.
 	queue.enqueueNDRangeKernel(draw, cl::NullRange, H*W, cl::NullRange);
