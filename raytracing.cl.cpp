@@ -23,7 +23,7 @@ struct _Ray{
 
 typedef struct _Ray Ray;
 
-#define SAMPLE_COUNT 4
+#define SAMPLE_COUNT 16
 
 int getRand(int* prng){
     (*prng) = (*prng)*8763;
@@ -137,6 +137,7 @@ Ray reflect(int* prng, Ray ray, uint3 cubeIndex, double t){
     double sx = sample(prng), sy = sample(prng);
     sx -= 0.5, sy -= 0.5;
     sx *= 0.3, sy *= 0.3;
+
     if(isZero(fabs(N.x) - 1)) N.y = sx, N.z = sy;
     else if(isZero(fabs(N.y) - 1)) N.x = sx, N.z = sy;
     else if(isZero(fabs(N.z) - 1)) N.y = sx, N.x = sy;

@@ -1,51 +1,26 @@
 #include <random>
 
-void sampleSquare(double& x, double& y){
-    std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(0, 1000);
-    std::default_random_engine e1(r());
-
-    int nx = uniform_dist(e1), ny = uniform_dist(e1);
-
-    x = nx/1000., y = ny/1000.;
-    return;
+int getRand(int* prng){
+    (*prng) = (*prng)*8763;
+    (*prng) %= 1000000007;
+    (*prng) ^= 0xdeadbeef;
+    if((*prng) < 0) (*prng) = -(*prng);
+    return *prng;
 }
 
-void sampleCircle(double& x, double& y){
-    double r, theta;                                                                                                                   
-    sampleSquare(r, theta);
-    r = std::sqrt(r);
-    theta *= 2*3.1415926*theta;
-    x = r*std::cos(r);
-    y = r*std::sin(r);
-    return;
+// Return Random in [0, 1)
+double sample(int* prng){
+    int a = getRand(prng)%12345678;
+    return a/12345678.;
 }
 
-// |Sample| = n*n
-void samplesSquare(double* x, double* y, int n){
-    std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(0, 1000);
-    std::default_random_engine e1(r());
-    
+void samplesSquare(int* prng, double* x, double* y, int n){
     double delta = 1./n;
-     
     for(int lx = 0;lx < n;lx++){
         for(int ly = 0;ly < n;ly++){
-            int nx = uniform_dist(e1), ny = uniform_dist(e1);
-            x[lx*n + ly] = delta*lx + nx/1000./n;
-            y[lx*n + ly] = delta*ly + ny/1000./n;
+            x[lx*n + ly] = delta*(lx + sample(prng));
+            y[lx*n + ly] = delta*(ly + sample(prng));
         }
     }
-
     return;
-}
-
-void sampleLine(double &x){
-    std::random_device r;
-    std::uniform_int_distribution<int> uniform_dist(0, 1000);
-    std::default_random_engine e1(r());
-
-    int nx = uniform_dist(e1);
-
-    x = nx/1000.;
 }

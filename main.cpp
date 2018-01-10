@@ -96,15 +96,14 @@ Vec3d getNormal(const Ray& ray, const Vec3i& index, double t){
     assert(0);
 }
 
-Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
+Ray reflect(int* prng, const Ray& ray, const Vec3i& cubeIndex, double t){
     Vec3d I = ray.d;
     Vec3d N = getNormal(ray, cubeIndex, t);
     
     // Scattering
-    double sx, sy;
-    sampleCircle(sx, sy);
+    double sx = sample(prng), sy = sample(prng);
     sx -= 0.5, sy -= 0.5;
-    sx *= 0.1, sy *= 0.1;
+    sx *= 0.3, sy *= 0.3;
 
     if(isZero(std::abs(N.x) - 1)) N.y = sx, N.z = sy;
     else if(isZero(std::abs(N.y) - 1)) N.x = sx, N.z = sy;
@@ -117,7 +116,7 @@ Ray reflect(const Ray& ray, const Vec3i& cubeIndex, double t){
     return Ray(ray(t), N*dt*2 + I, 0.01);
 }
 
-Vec3d rayTracing(const Ray& ray, int level = 0){
+Vec3d rayTracing(int* prng, const Ray& ray, int level = 0){
     const Vec3d white(1, 1, 1);
     const Vec3d black(0, 0, 0);
     const Vec3d red(1, 0, 0);
@@ -147,7 +146,7 @@ Vec3d rayTracing(const Ray& ray, int level = 0){
 
         Vec3d ret;
         for(int lx = 0;lx < RAY_COUNT;lx++){
-            ret = ret + rayTracing(reflect(ray, cubeIndex, tt), level+1);
+            ret = ret + rayTracing(prng, reflect(prng, ray, cubeIndex, tt), level+1);
         }
 
         ret = ret*cube_color;
@@ -176,12 +175,13 @@ int main(int argc, char** argv){
     Vec3d eye(W/2, H/2, -512);
     Vec3d pic[H][W];
 
-    int SAMPLE_COUNT = 2;
-    int THREAD_COUNT = 4;
+    int SAMPLE_COUNT = 16;
+    int THREAD_COUNT = 1;
 
     assert(W%THREAD_COUNT == 0);
 
     auto sample_function = [&pic, eye, SAMPLE_COUNT, THREAD_COUNT](int id){
+        int prng = id;
         for(int y = 0; y < H; ++y){
             std::cout << y*100/H << "%\r";
             std::cout << std::flush;
@@ -191,14 +191,14 @@ int main(int argc, char** argv){
                 int x = _x*THREAD_COUNT + id;
 
                 double sx[SAMPLE_COUNT*SAMPLE_COUNT], sy[SAMPLE_COUNT*SAMPLE_COUNT];
-                samplesSquare(sx, sy, SAMPLE_COUNT);
+                samplesSquare(&prng, sx, sy, SAMPLE_COUNT);
 
                 Vec3d col;
 
                 for(int lx = 0;lx < SAMPLE_COUNT*SAMPLE_COUNT;lx++){
                     int cid = lx;
                     Ray ray(Vec3d(x+sx[cid] + 1300,y+sy[cid],0), Vec3d(x+sx[cid], y+sy[cid], 0) - eye);
-                    col = col + rayTracing(ray);
+                    col = col + rayTracing(&prng, ray);
                 }
 
                 pic[y][x] = col/SAMPLE_COUNT/SAMPLE_COUNT;
