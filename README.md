@@ -11,6 +11,14 @@ GPU Ray tracing for the world which only exists cube
 
 ### Performance
 
+* CPU
+  - CPU(s): 40
+  - Thread(s) per core: 2
+  - Core(s) per socket: 10
+  - Socket(s): 2
+* GPU
+  - Tesla K80
+  
 #### CPU Threading
 
 | Samples\Threading | 1 | 2 | 4 | 8 | 16 |
