@@ -7,7 +7,7 @@ GPU Ray tracing for the world which only exists cube
 
 256 Samples : 
 
-![256 samples](out%20(14).bmp)
+![256 samples](256s.bmp)
 
 ### Performance
 
